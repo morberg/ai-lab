@@ -12,8 +12,12 @@ BLOCK_SIZE = 30
 GRID_WIDTH = PLAY_WIDTH // BLOCK_SIZE  # 10
 GRID_HEIGHT = PLAY_HEIGHT // BLOCK_SIZE  # 20
 
+UI_PANEL_WIDTH = 150  # Width of the panel for score, next piece, etc.
+UI_MARGIN = 20  # Margin for elements within the UI panel
+
 # Top-left corner of the play area
-TOP_LEFT_X = (SCREEN_WIDTH - PLAY_WIDTH - 150) // 2 + 150  # Shift right for score/next
+# Center the combined play area and UI panel
+TOP_LEFT_X = (SCREEN_WIDTH - (PLAY_WIDTH + UI_PANEL_WIDTH)) // 2
 TOP_LEFT_Y = (SCREEN_HEIGHT - PLAY_HEIGHT) // 2
 
 # Colors
@@ -88,6 +92,7 @@ class Piece:
                 return False
             if r_world >= GRID_HEIGHT:  # Check vertical bottom bound
                 return False
+            # Only check for collision if the block is within the grid's top boundary
             if (
                 r_world >= 0 and grid[r_world][c_world] != BLACK
             ):  # Check collision with locked pieces
@@ -110,7 +115,7 @@ def new_piece():
 def lock_piece(grid, piece):
     for r_offset, c_offset in piece.current_shape_coords:
         r, c = piece.y + r_offset, piece.x + c_offset
-        if 0 <= r < GRID_HEIGHT and 0 <= c < GRID_WIDTH:
+        if 0 <= r < GRID_HEIGHT and 0 <= c < GRID_WIDTH:  # Ensure locking within bounds
             grid[r][c] = piece.color
 
 
@@ -259,26 +264,23 @@ def draw_ghost_piece(surface, piece, grid):
 
 
 def draw_ui(surface, score, next_piece_obj):
+    ui_panel_start_x = TOP_LEFT_X + PLAY_WIDTH + UI_MARGIN
+
     # Score
     font_score = pygame.font.SysFont("Consolas", 30, bold=True)
     score_label = font_score.render(f"Score: {score}", 1, WHITE)
-    surface.blit(score_label, (TOP_LEFT_X + PLAY_WIDTH + 20, TOP_LEFT_Y + 50))
+    surface.blit(score_label, (ui_panel_start_x, TOP_LEFT_Y + 50))
 
     # Next Piece
     font_next = pygame.font.SysFont("Consolas", 24, bold=True)
     next_label = font_next.render("Next:", 1, WHITE)
-    next_area_x = TOP_LEFT_X + PLAY_WIDTH + 20
-    next_area_y = TOP_LEFT_Y + 120
-    surface.blit(next_label, (next_area_x, next_area_y - 30))
+    next_area_y = TOP_LEFT_Y + 120  # Y position for the "Next:" label
+    surface.blit(next_label, (ui_panel_start_x, next_area_y - 30))
 
-    # Draw the next_piece centered in a small box
-    # For drawing, treat its pivot as (0,0) locally and offset the whole shape
-    # Find min/max r/c offsets to help center it in the preview box (approx 4x4 blocks)
-
+    # Draw the next_piece centered in a small box below the "Next:" label
     preview_block_size = BLOCK_SIZE * 0.7
-    shape_coords = next_piece_obj.current_shape_coords  # Use current rotation
+    shape_coords = next_piece_obj.current_shape_coords
 
-    # Calculate bounding box of the shape to center it
     if not shape_coords:
         return
     min_r = min(r for r, c in shape_coords)
@@ -286,20 +288,20 @@ def draw_ui(surface, score, next_piece_obj):
     min_c = min(c for r, c in shape_coords)
     max_c = max(c for r, c in shape_coords)
 
-    shape_block_width = (max_c - min_c + 1) * preview_block_size
-    shape_block_height = (max_r - min_r + 1) * preview_block_size
-
     # Center of the preview area (e.g., 5x4 blocks wide/high)
-    preview_box_center_x = next_area_x + (5 * preview_block_size) / 2
-    preview_box_center_y = next_area_y + (4 * preview_block_size) / 2
+    # The preview box itself will be placed relative to ui_panel_start_x and next_area_y
+    preview_box_width_pixels = 5 * preview_block_size
+    preview_box_height_pixels = 4 * preview_block_size
 
-    # Offset to draw the shape so its center aligns with preview_box_center
-    # Shape's own center (relative to its pivot, in block units):
+    preview_box_center_x = ui_panel_start_x + (preview_box_width_pixels / 2)
+    preview_box_center_y = (
+        next_area_y + (preview_box_height_pixels / 2) + 10
+    )  # +10 to give some space below "Next:"
+
     shape_center_c_offset = (min_c + max_c) / 2.0
     shape_center_r_offset = (min_r + max_r) / 2.0
 
     for r_off, c_off in shape_coords:
-        # Position each block relative to the shape's calculated center, then place that at preview_box_center
         draw_x = (
             preview_box_center_x + (c_off - shape_center_c_offset) * preview_block_size
         )
@@ -317,36 +319,47 @@ def draw_ui(surface, score, next_piece_obj):
         pygame.draw.rect(surface, darker_color, rect, 2)
 
 
-def draw_game_over(surface):
-    font_large = pygame.font.SysFont("Impact", 70)
-    font_small = pygame.font.SysFont("Arial", 30)
+def draw_game_over(surface, score):
+    font_large = pygame.font.SysFont("Impact", 60)  # Slightly smaller for more text
+    font_medium = pygame.font.SysFont("Arial", 35, bold=True)
+    font_small = pygame.font.SysFont("Arial", 28)
+    padding_between_texts = 20
 
     game_text = font_large.render("GAME", 1, (200, 0, 0))
     over_text = font_large.render("OVER", 1, (200, 0, 0))
+    final_score_text = font_medium.render(f"Final Score: {score}", 1, WHITE)
     restart_text = font_small.render("Press R to Restart", 1, WHITE)
+
+    # Calculate total height of the text block for centering
+    texts = [game_text, over_text, final_score_text, restart_text]
+    total_text_block_height = (
+        sum(text.get_height() for text in texts)
+        + (len(texts) - 1) * padding_between_texts
+    )
 
     # Create a semi-transparent overlay
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))  # Black with alpha
     surface.blit(overlay, (0, 0))
 
+    # Starting Y position for the block
+    current_y = SCREEN_HEIGHT / 2 - total_text_block_height / 2
+
+    # Blit texts one by one
+    surface.blit(game_text, (SCREEN_WIDTH / 2 - game_text.get_width() / 2, current_y))
+    current_y += game_text.get_height() + padding_between_texts
+
+    surface.blit(over_text, (SCREEN_WIDTH / 2 - over_text.get_width() / 2, current_y))
+    current_y += over_text.get_height() + padding_between_texts
+
     surface.blit(
-        game_text,
-        (
-            SCREEN_WIDTH / 2 - game_text.get_width() / 2,
-            SCREEN_HEIGHT / 2 - game_text.get_height() - 10,
-        ),
+        final_score_text,
+        (SCREEN_WIDTH / 2 - final_score_text.get_width() / 2, current_y),
     )
+    current_y += final_score_text.get_height() + padding_between_texts
+
     surface.blit(
-        over_text,
-        (SCREEN_WIDTH / 2 - over_text.get_width() / 2, SCREEN_HEIGHT / 2 + 10),
-    )
-    surface.blit(
-        restart_text,
-        (
-            SCREEN_WIDTH / 2 - restart_text.get_width() / 2,
-            SCREEN_HEIGHT / 2 + over_text.get_height() + 30,
-        ),
+        restart_text, (SCREEN_WIDTH / 2 - restart_text.get_width() / 2, current_y)
     )
 
 
@@ -367,6 +380,7 @@ def main():
     fall_timer = 0
     fall_speed = 0.4  # Seconds per automatic drop
     level_threshold = 500  # Score to increase speed
+    initial_fall_speed = 0.4  # Store initial speed for reset
 
     flash_alpha = 0  # For line clear screen flash
 
@@ -387,7 +401,7 @@ def main():
                         score = 0
                         game_over = False
                         fall_timer = 0
-                        fall_speed = 0.4
+                        fall_speed = initial_fall_speed  # Reset fall speed
                         flash_alpha = 0
                 else:  # Game is active
                     if event.key == pygame.K_j:  # Move Left
@@ -410,9 +424,7 @@ def main():
                         current_piece.rotate("clockwise", grid)
                     elif event.key == pygame.K_i:  # Rotate Counter-Clockwise
                         current_piece.rotate("counter_clockwise", grid)
-                    elif (
-                        event.key == pygame.K_DOWN
-                    ):  # Soft drop (optional, or make automatic faster)
+                    elif event.key == pygame.K_DOWN:  # Soft drop
                         if current_piece.is_valid_position(
                             current_piece.current_shape_coords,
                             current_piece.x,
@@ -420,8 +432,10 @@ def main():
                             grid,
                         ):
                             current_piece.y += 1
+                            score += 1  # Small score bonus for soft drop
                             fall_timer = 0  # Reset auto-fall timer
                     elif event.key == pygame.K_SPACE:  # Hard Drop
+                        drop_distance = 0
                         while current_piece.is_valid_position(
                             current_piece.current_shape_coords,
                             current_piece.x,
@@ -429,6 +443,9 @@ def main():
                             grid,
                         ):
                             current_piece.y += 1
+                            drop_distance += 1
+                        score += drop_distance * 2  # Score bonus for hard drop
+
                         # Lock piece immediately after hard drop
                         lock_piece(grid, current_piece)
                         lines_cleared = clear_lines(grid)
@@ -462,21 +479,22 @@ def main():
                     lock_piece(grid, current_piece)
                     lines_cleared = clear_lines(grid)
                     if lines_cleared > 0:
-                        score += calculate_score(lines_cleared)
+                        score_increase = calculate_score(lines_cleared)
+                        score += score_increase
                         flash_alpha = 180  # Trigger screen flash
 
                         # Increase speed based on score (simple leveling)
-                        if (
-                            score // level_threshold
-                            > (score - calculate_score(lines_cleared))
-                            // level_threshold
-                        ):
+                        # Check if current score crosses a new level threshold
+                        current_level = score // level_threshold
+                        previous_level = (score - score_increase) // level_threshold
+                        if current_level > previous_level:
                             fall_speed = max(
                                 0.1, fall_speed * 0.9
                             )  # Decrease fall speed by 10%, min 0.1s
 
                     current_piece = next_piece
                     next_piece = new_piece()
+                    # Check if the new piece spawns in a valid position
                     if not current_piece.is_valid_position(
                         current_piece.current_shape_coords,
                         current_piece.x,
@@ -501,16 +519,16 @@ def main():
             flash_surface = pygame.Surface(
                 (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA
             )
-            flash_surface.fill((255, 255, 255, flash_alpha))  # White flash
+            flash_surface.fill(
+                (255, 255, 255, int(flash_alpha))
+            )  # White flash, ensure alpha is int
             screen.blit(flash_surface, (0, 0))
-            flash_alpha -= (
-                250 * dt
-            )  # Fade out speed (adjust based on FPS, e.g. 250 units per sec)
+            flash_alpha -= 250 * dt  # Fade out speed
             if flash_alpha < 0:
                 flash_alpha = 0
 
         if game_over:
-            draw_game_over(screen)
+            draw_game_over(screen, score)  # Pass score to game over screen
 
         pygame.display.flip()
 
