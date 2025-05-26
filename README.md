@@ -22,3 +22,10 @@ The long 4x1 block does not rotate, can you fix this?
 
 And the new version did fix the problem. Remaining problem: pressing Q does not
 end the game properly.
+
+```text
+Pressing Q does not end the game properly
+````
+
+This was interpreted to fix quitting during normal gameplay (which probably
+didn't work either). Now it is much better, both during gameplay and after.

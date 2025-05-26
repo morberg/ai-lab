@@ -115,7 +115,8 @@ class TetrisGame:
 
         # Check game over
         if self.check_collision():
-            self.game_over()
+            return self.game_over()
+        return True
 
     def get_piece_shape(self):
         if self.current_piece:
@@ -167,7 +168,9 @@ class TetrisGame:
                             )
 
         self.check_lines()
-        self.spawn_piece()
+        if not self.spawn_piece():
+            return False
+        return True
 
     def check_lines(self):
         lines_to_clear = []
@@ -346,6 +349,7 @@ class TetrisGame:
             "K - Rotate CW",
             "I - Rotate CCW",
             "Space - Drop",
+            "Q - Quit",
         ]
         for i, text in enumerate(controls):
             color = (255, 255, 0) if i == 0 else (200, 200, 200)
@@ -430,11 +434,14 @@ class TetrisGame:
                         self.rotate_piece(-1)
                     elif event.key == pygame.K_SPACE:  # Drop
                         self.drop_piece()
+                    elif event.key == pygame.K_q:  # Quit game
+                        running = False
 
             # Natural fall
             if self.fall_time >= self.fall_speed:
                 if not self.move_piece(0, 1):
-                    self.place_piece()
+                    if not self.place_piece():
+                        running = False
                 self.fall_time = 0
 
             # Update animations
