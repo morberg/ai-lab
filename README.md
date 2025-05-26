@@ -14,4 +14,11 @@ uv add pygame
 ```
 
 and we're good to go. Downloaded the first version and most things worked. One
-problem was that the long 4x1 block did not rotate.
+problem was that the long 4x1 block did not rotate. Asking for a fix with:
+
+```text
+The long 4x1 block does not rotate, can you fix this?
+```
+
+And the new version did fix the problem. Remaining problem: pressing Q does not
+end the game properly.
